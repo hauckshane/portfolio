@@ -1,0 +1,723 @@
+---
+title: "Spotify"
+author: "Shane Hauck"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: leonids
+
+
+---
+<body style="background-color:lightgreen;">
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.height = 7, fig.width = 8)
+```
+
+ “I understand that the rules for collaboration for this project have changed. I have read these rules and certify that all work presented here is entirely my own, unless otherwise cited.”
+ - Shane Hauck
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(GGally)
+library(class)
+library(knitr)
+library(kableExtra)
+library(hrbrthemes)
+```
+
+
+__PART 1__
+
+__Introduction__
+
+The data from this dataset is from Spotify via the spotifyr package. It contains a total of 28,356 songs that stem from 6 different genres (EDM, Latin, Pop, R&B, Rap, & Rock). The variables that are included in this dataset are listed below:
+
+- __track_id__: Song unique ID
+
+- __track_name__: Song name
+
+- __track_artist__: Song artist
+
+- __track_popularity__: Song popularity (0-100) where higher is better
+
+- __track_album_id__: Album unique ID
+
+- __track_album_name__: Song album name
+
+- __track_album_release_date__: Date when album released
+
+- __playlist_name__: Name of playlist
+
+- __playlist_id__: Playlist ID
+
+- __playlist_genre__: Playlist genre
+
+- __danceability__: Danceability describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity. A value of 0.0 is least danceable and 1.0 is most danceable.
+
+- __energy__: Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy, while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate, and general entropy.
+
+- __key__: 	The estimated overall key of the track. Integers map to pitches using standard Pitch Class notation . E.g. 0 = C, 1 = C♯/D♭, 2 = D, and so on. If no key was detected, the value is -1.
+
+- __loudness__: The overall loudness of a track in decibels (dB). Loudness values are averaged across the entire track and are useful for comparing relative loudness of tracks. Loudness is the quality of a sound that is the primary psychological correlate of physical strength (amplitude). Values typical range between -60 and 0 db.
+
+- __mode__: Mode indicates the modality (major or minor) of a track, the type of scale from which its melodic content is derived. Major is represented by 1 and minor is 0.
+
+- __speechiness__: Speechiness detects the presence of spoken words in a track. The more exclusively speech-like the recording (e.g. talk show, audio book, poetry), the closer to 1.0 the attribute value. Values above 0.66 describe tracks that are probably made entirely of spoken words. Values between 0.33 and 0.66 describe tracks that may contain both music and speech, either in sections or layered, including such cases as rap music. Values below 0.33 most likely represent music and other non-speech-like tracks.
+
+- __acousticness__: A confidence measure from 0.0 to 1.0 of whether the track is acoustic. 1.0 represents high confidence the track is acoustic.
+
+- __instrumentalness__: 	Predicts whether a track contains no vocals. “Ooh” and “aah” sounds are treated as instrumental in this context. Rap or spoken word tracks are clearly “vocal”. The closer the instrumentalness value is to 1.0, the greater likelihood the track contains no vocal content. Values above 0.5 are intended to represent instrumental tracks, but confidence is higher as the value approaches 1.0.
+
+- __liveness__: 	Detects the presence of an audience in the recording. Higher liveness values represent an increased probability that the track was performed live. A value above 0.8 provides strong likelihood that the track is live.
+
+- __valence__: A measure from 0.0 to 1.0 describing the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry).
+
+- __tempo__: The overall estimated tempo of a track in beats per minute (BPM). In musical terminology, tempo is the speed or pace of a given piece and derives directly from the average beat duration.
+
+- __duration_ms__: Duration of song in milliseconds
+
+```{r}
+spotify_songs <- read_csv("data/spotify_songs.csv")
+```
+
+The main question that I will be trying to answer throughout this project is:
+
+__What has attributed to making Spotify become so popular?__
+
+__Exploration__
+
+```{r}
+spotify_dupes <- spotify_songs %>% get_dupes(track_id)
+spotify_keeps <- spotify_songs %>% get_dupes(track_id) %>%
+  group_by(track_id) %>%
+  sample_n(1) %>%
+  ungroup()
+spotify_undupes <- anti_join(spotify_songs, spotify_dupes)
+spotify_final <- bind_rows(spotify_undupes, spotify_keeps)
+```
+
+When looking through the dataset I noticed that there were a number of the same songs that were included multiple times. This is something that I feel would affect the normality assumption of the data so as a result I decided to remove all the duplicates from the dataset and make sure each song was only included once.
+
+```{r}
+spotify_df <- spotify_final %>% 
+  mutate(track_album_release_date = ymd(track_album_release_date)) %>%
+  mutate(Year = year(track_album_release_date)) %>%
+  select(-c(dupe_count)) %>%
+  filter(Year != 2020)
+```
+
+Since I will be specifically be looking at the different years in my research I needed to make Year a variable. To do this the track_album_release_date variable needed to be changed from a character variable into a date variable. I did this with lubridate. I then took the year from each tracks given release date. I decided to get rid of all tracks from the year 2020 because the data is not complete for that year. 
+
+
+```{r}
+year_numsongs <- spotify_df %>%
+  group_by(Year) %>%
+  summarise(num_songs = n()) 
+
+ggplot(year_numsongs, aes(x = Year, y = num_songs)) +
+  geom_line(colour = "green") +
+  geom_vline(xintercept = 2008, colour = "red") + 
+  labs(title = "Number of Songs Released per Year",
+       y = "Number of Songs",
+       subtitle = "red line indicates year spotify launched (2008)") +
+  theme_ft_rc()
+```
+
+```{r}
+spotify_2008plus <- spotify_df %>% filter(Year >= 2008) 
+  
+```
+
+The above plot shows the total number of songs released each year that are featured on Spotify. As you can clearly see that there has been a steep increase in recent years. I think Spotify does little justice for songs released before Spotify was launched. Songs that were released before Spotify came out are likely only to be included if they were popular where as a lot of songs, no matter the popularity, are likely to be featured on Spotify in recent years as it is a very accessible platform for newer artists to get their music featured. That being said, I think in context of looking at Spotify, it is only right to include data from after Spotify was released. Therefore, from this point forward, I am only going to be including data from the year 2008 on. (Note: Spotify was released on July 11th, 2008)
+
+```{r}
+numsongs_change_table <- spotify_2008plus %>% group_by(Year) %>%
+  summarise(`# of Songs` = n()) %>%
+  mutate(`Previous Year` = Year - 1,
+         Change = `# of Songs` - lag(`# of Songs`),
+         `% Change` = Change / lag(`# of Songs`) * 100) %>%
+  arrange(desc(Year)) %>%
+  select(Year, `Previous Year`, everything())
+
+kable(numsongs_change_table, digits = 2, caption = "Number of Songs Released per Year")
+```
+
+```{r}
+numsongs_change_plot <- spotify_2008plus %>% group_by(Year, playlist_genre) %>%
+  summarise(`# of Songs` = n()) %>%
+  mutate(Year = as.factor(Year))
+
+ggplot(numsongs_change_plot, aes(x = Year, y = `# of Songs`, fill = playlist_genre)) +
+  geom_col(colour = "black") +
+  scale_fill_viridis_d() +
+  labs(title = "Number of Songs Released per Year",
+       y = "Number of Songs",
+       fill = "Playlist Genre") +
+  theme_ft_rc()
+```
+
+The above table and graph shows how the total number of songs released in a year onto Spotify has changed overtime. The first thing that stands out is the 154% increase in the most recent year (2019) in the data. The fact that the total number of songs have more than doubled and a halfed shows how popular Spotify has become in recent years. I am going to use the three biggest percent increases in total songs released per year to investigate the sudden uptick. I am going to start with the 2013 going into 2014 (that's the year I actually started using Spotify) where there was a 61% increase, then look at 2017 into 2018 which had a 36% increase and finally investigate 2018 into 2019.
+
+Looking at the graph above it is already worth pointing out the genre of music and the affect it has. As you can see there is a positive correlation between all the genres and number of songs released. It appears that across all the year of main focus, the rock genre has seen the smallest increase in total songs. Rock is likely to be followed by r&b. After that it looks like there are similar changes between edm; latin; pop; and rap where  those genres are seeing a larger number of songs being released. 
+
+```{r}
+ggplot(numsongs_change_plot, aes(x = Year, y = `# of Songs`, group = playlist_genre)) +
+  geom_line(aes(colour = playlist_genre), size = 1.5) +
+  scale_color_viridis_d() +
+  geom_vline(xintercept = c("2013", "2014", "2017", "2018", "2019"), colour = "red") +
+  labs(title = "Number of Songs Released per Year",
+       y = "Number of Songs",
+       colour = "Playlist Genre") +
+  theme_ft_rc()
+```
+
+When looking at how the total number of songs released each year is impacted by the songs genre, we see that edm consistently has the most number of songs released each year and during our years of most interest, we see that it also tends to have the steepest increase. All the other genres do have positive trends in the years of interest with rock still being the least influential.
+
+For this next part, I am going to start diving a little deeper into the main years of interest to see what music attributed to increase in number of songs. 
+
+__Year 2014__
+
+```{r}
+spotify2014 <- spotify_2008plus %>% filter(Year == 2014)
+```
+
+```{r}
+mostfreq_rd2014 <- spotify2014 %>% group_by(track_album_release_date) %>%
+  summarise(`# of Songs Released` = n(),) %>%
+  mutate(Rank = rank(desc(`# of Songs Released`))) %>%
+  arrange(desc(`# of Songs Released`)) %>%
+  slice(1:3) %>%
+  select(Rank, everything())
+kable(mostfreq_rd2014, caption = "Most Popular Release Dates in 2014")
+```
+
+The table above shows the dates when the most songs were released onto Spotify in 2014. 2014 started off with a bang as 133 songs were released on New Year's Day.
+
+```{r}
+mostfreq_artists2014 <- spotify2014 %>% group_by(track_artist) %>%
+  summarise(`# of Songs Released` = n()) %>%
+  mutate(Rank = rank(desc(`# of Songs Released`))) %>%
+  arrange(desc(`# of Songs Released`)) %>%
+  slice(1:9) %>%
+  mutate(Artist = track_artist) %>%
+  select(Rank, Artist, `# of Songs Released`) 
+  
+kable(mostfreq_artists2014, digits = 0, caption = "Artists with Most Songs in 2014")
+```
+
+Afrojack followed by Coldplay were the artists who released the most songs onto Spotify in 2014.
+
+__Year 2018__
+
+```{r}
+spotify2018 <- spotify_2008plus %>% filter(Year == 2018)
+```
+
+```{r}
+mostfreq_rd2018 <- spotify2018 %>% group_by(track_album_release_date) %>%
+  summarise(`# of Songs Released` = n(),) %>%
+  mutate(Rank = rank(desc(`# of Songs Released`))) %>%
+  arrange(desc(`# of Songs Released`)) %>%
+  slice(1:3) %>%
+  select(Rank, everything())
+kable(mostfreq_rd2018, digits = 0, caption = "Most Popular Release Dates in 2018")
+```
+
+The table above shows the dates when the most songs were released onto Spotify in 2018.
+
+
+```{r}
+mostfreq_artists2018 <- spotify2018 %>% group_by(track_artist) %>%
+  summarise(`# of Songs Released` = n()) %>%
+  mutate(Rank = rank(desc(`# of Songs Released`))) %>%
+  arrange(desc(`# of Songs Released`)) %>%
+  slice(1:8) %>%
+  mutate(Artist = track_artist) %>%
+  select(Rank, Artist, `# of Songs Released`) 
+  
+kable(mostfreq_artists2018, digits = 0, caption = "Artists with Most Songs in 2018")
+```
+
+The artists that released the most songs in 2018 were Bad Bunny followed by Rob Stepwart and Semser.
+
+__Year 2019__
+
+```{r}
+spotify2019 <- spotify_2008plus %>% filter(Year == 2019)
+```
+
+```{r}
+mostfreq_rd2019 <- spotify2019 %>% group_by(track_album_release_date) %>%
+  summarise(`# of Songs Released` = n(),) %>%
+  mutate(Rank = rank(desc(`# of Songs Released`))) %>%
+  arrange(desc(`# of Songs Released`)) 
+kable(mostfreq_rd2019 %>% slice(1:3) %>% select(Rank, everything()), caption = "Most Popular Release Dates in 2019")
+```
+
+The table above shows the dates where the most songs were released onto Spotify in 2019. It appears that toward the end of the year the total number of songs released on dates saw a large increase.
+
+```{r}
+ggplot(mostfreq_rd2019 %>% 
+         mutate(day_of_week = wday(track_album_release_date,
+                                    label = TRUE, abbr = TRUE)) %>%
+         filter(day_of_week == "Fri"), 
+       aes(x = track_album_release_date, y = `# of Songs Released`)) +
+  geom_point(colour = "green") +
+  geom_smooth(se = F) +
+  labs(title = "Number of Songs released on Fridays during 2019",
+       subtitle = "majority of music gets released on Fridays",
+       y = "Number of Songs Released on Date",
+       x = "Friday Release Dates") +
+  theme_ft_rc()
+```
+
+As you can see in the graph above, there is an increase in total number of songs released as the 2019 progresses.
+
+```{r}
+mostfreq_artists2019 <- spotify2019 %>% group_by(track_artist) %>%
+  summarise(`# of Songs Released` = n()) %>%
+  mutate(Rank = rank(desc(`# of Songs Released`))) %>%
+  arrange(desc(`# of Songs Released`)) %>%
+  slice(1:10) %>%
+  mutate(Artist = track_artist) %>%
+  select(Rank, Artist, `# of Songs Released`) 
+  
+kable(mostfreq_artists2019, digits = 0, caption = "Artists with Most Songs in 2019")
+```
+
+The artists that were most frequent in releasing music in 2019 were Dimitri Vegas & Like Mike who released 20 songs and they were followed by Logic and then there was a 3-way tie between Hardwell, Steve Aoki and the Chainsmokers.
+
+As you can see with my investigation above, by focusing on the years where Spotify had the greatest uptick in total songs getting released, we are able to see why Spotify has became such a popular resource for artists big and small. 
+
+
+Up to now I have been using Number of Songs as a response variable to talk about Spotify's overall popularity. Although I believe that this a good indicator for how Spotify has became popular for artists over the years, I don't think it is as good an indicator for how Spotify has became popular for listeners over the years. To showcase this, I will now be using track popularity as a response to see how tracks have fared to the public since Spotify was released.
+
+```{r}
+popchange_plotpt1 <- spotify_2008plus %>% group_by(Year) %>%
+  summarise(`Mean Song Popularity` = mean(track_popularity)) %>%
+  mutate(Year = as.factor(Year),
+         playlist_genre = as.factor("all"))
+
+popchange_plotpt2 <- spotify_2008plus %>% group_by(Year, playlist_genre) %>%
+  summarise(`Mean Song Popularity` = mean(track_popularity)) %>%
+  mutate(Year = as.factor(Year),
+         playlist_genre = as.factor(playlist_genre))
+
+ggplot(popchange_plotpt2, aes(x = Year, y = `Mean Song Popularity`, colour = playlist_genre)) +
+  geom_point(size = 2) +
+  geom_point(shape = 1, size = 3, colour = "white") +
+  geom_point(data = popchange_plotpt1, colour = "red", size = 2) +
+  geom_line(data = popchange_plotpt1, aes(x = as.numeric(Year), y = `Mean Song Popularity`), colour = "red", size = 1.5) +
+  scale_color_viridis_d() +
+  labs(title = "Average Song Popularity per Year",
+       y = "Average Song Popularity",
+       subtitle = "average for all songs in that year marked in red",
+       colour = "Playlist Genre") +
+  theme_ft_rc()
+```
+
+When looking at the above plot for the average song popularity per year, we see that there is a positive trend for all songs. From 2008 to 2019, we see around a 20 point increase in song popularity for all songs in a given year. Ever since the year 2014, popularithy has increased consistently. Although we previously saw that edm was consistently the genre releasing the most songs every year, here we see that it is actually consistently the least popular genre. This could be indicating to us that there is a greater quantity rather than quality of edm songs. As far as the other genres go, there doesn't appear to be a clear favorite year in year out. Latin, pop, r&b and rap all seem to be relatively popular depending on the year. Rock tends to teeter around the average line. 
+
+```{r}
+pop_change <- spotify_2008plus %>% group_by(Year) %>%
+  summarise(`Mean Song Popularity` = mean(track_popularity)) %>%
+  mutate(`Previous Year` = Year - 1,
+         Change = `Mean Song Popularity` - lag(`Mean Song Popularity`),
+         `% Change` = Change / lag(`Mean Song Popularity`) * 100) %>%
+  arrange(desc(Year)) %>%
+  select(Year, `Previous Year`, everything())
+kable(pop_change, digits = 1, caption = "Change in Average Song Popularity per Year")
+```
+
+The years with the greatest increase in popularity are from 2009-2010, 2014-2015, and 2018-2019 with percent increases of 18, 17 and 11 respectively. There was large drop in popularity from 2012-2013 as the average popularity score dropped by 16%. 
+
+```{r}
+mostpop_artists <- spotify_2008plus %>% 
+  mutate(`Song Rank` = rank(track_popularity)) %>%
+  ungroup() %>%
+  group_by(track_artist) %>%
+  summarise(`Mean Song Popularity` = mean(track_popularity),
+            `Best Song Popularity` = max(track_popularity),
+            `Song Rank Total` = sum(`Song Rank`),
+            `Total Songs` = n()) %>%
+  mutate(Rankscore = `Mean Song Popularity` + `Best Song Popularity` + `Song Rank Total`,
+         Rank = rank(desc(Rankscore)),
+         Artist = track_artist) %>%
+  arrange(Rank) %>%
+  slice(1:20) %>%
+  select(Rank, Artist, everything(), -c(`Song Rank Total`, track_artist))
+kable(mostpop_artists, digits = 2, caption = "Most Popular Artists Since Spotify Launched") %>%
+  footnote(general = "Rankscore is calculated by the sum of an artists Mean Song Popularity, their Best Song Popularity and their Song Rank Total (where all songs in dataset were ranked as to how popular they were and then the inverse was taken. So the worst song is given a 1 and the best song is given 19674. All songs for each artist is totalled up giving them their Song Rank Total)")
+```
+
+The table above shows the top artists since 2008. The top 5 artists are David Guetta, Martin Garrix, The Chainsmokers, Drake and Logic. These are all artists who have thrived during the Spotify era. Their music now being so accesible through streaming has helped maked todays most popular artists more popular than ever,
+
+```{r}
+mostpop_songs <- spotify_2008plus %>% 
+  mutate(Rank = rank(desc(track_popularity)) )%>%
+  arrange(Rank) %>%
+  mutate(Song = track_name,
+         Artist = track_artist,
+         `Playlist Genre` = playlist_genre,
+         `Song Popularity` = track_popularity) %>%
+  select(Rank, Song, Artist, `Playlist Genre`, `Song Popularity`, Year) %>%
+  slice(1:20)
+kable(mostpop_songs, digits = 0, caption = "Most Popular Songs Since Spotify Launched")
+```
+
+The above table shows a very heavy bias of songs from 2019. This leads me to believe that in recent years the rating of popularity might be influenced by a recencey bias. This is not to say that music hasn't gotten "better" over the most recent time but I view it as unrealistic to conclude that almost all the top 20 of the most popular music for the 12 years of this data has come only in 2019. Therefore, I am now going to look from 2008-2017 (where the average song popularity for all songs was under 40).
+
+```{r}
+spotify_2008_2017 <- spotify_2008plus %>% filter(Year <= 2017)
+```
+
+```{r}
+mostpop_songs2 <- spotify_2008_2017 %>% 
+  mutate(Rank = rank(desc(track_popularity)))%>%
+  arrange(Rank) %>%
+  mutate(Song = track_name,
+         Artist = track_artist,
+         `Playlist Genre` = playlist_genre,
+         `Song Popularity` = track_popularity) %>%
+  select(Rank, Song, Artist, `Playlist Genre`, `Song Popularity`, Year) %>%
+  slice(1:20)
+kable(mostpop_songs2, digits = 0, caption = "Most Popular Songs (2008 - 2017")
+```
+
+Although we still see the most results in the most recent year (2017), there is a much more even distribution across the top 20 songs list. That being said, this does make sense as the plot from earlier (Average Song Popularity per Year) showed that there is a positive increase in song popularity over the years.
+
+```{r}
+mostpop_artists2 <- spotify_2008_2017 %>% 
+  mutate(`Song Rank` = rank(track_popularity)) %>%
+  ungroup() %>%
+  group_by(track_artist) %>%
+  summarise(`Mean Song Popularity` = mean(track_popularity),
+            `Best Song Popularity` = max(track_popularity),
+            `Song Rank Total` = sum(`Song Rank`),
+            `Total Songs` = n()) %>%
+  mutate(Rankscore = `Mean Song Popularity` + `Best Song Popularity` + `Song Rank Total`,
+         Rank = rank(desc(Rankscore))) %>%
+  arrange(Rank) %>%
+  slice(1:20) %>%
+  mutate(Artist = track_artist,
+         ) %>%
+  select(Rank, Artist, everything(), -c(`Song Rank Total`, track_artist))
+kable(mostpop_artists2, digits = 2, caption = "Most Popular Artists (2008 - 2017)") %>%
+  footnote(general = "Rankscore is calculated by the sum of an artists Mean Song Popularity, their Best Song Popularity and their Song Rank Total (where all songs in dataset were ranked as to how popular they were and then the inverse was taken. So the worst song is given a 1 and the best song is given 19674. All songs for each artist is totalled up giving them their Song Rank Total)")
+```
+
+Based on the research I had just found where songs released in 2019 were getting higher popularity scores, I wanted to recreate my Most Popular Artists table but this time regard to years 2008-2017. Predictably, there does appear to be a bit of change throughout the table but the majority of artists that appeared in the first table also appeared in the second.
+
+
+__Conclusion__
+
+I feel like limitations that I had during my research were due to the lack of explanation in the dataset. I don't believe the data has every song included on Spotify and I feel like this hurts my discussion of total songs being released per year. Although I feel like the dataset likely picked the most important songs from Spotify, it was likely not intended to be used as I used it. Another critique that I have is about the popularity section of my project. There was not an in depth description as to how the track_popularity variable was given scores. A variable that I wish I could have used in regard to this idea of looking at consumer popularity is a variable for total number of listens or streams for a given song. I feel like this would have been a better resource into looking at not only the peak popularity of a song but also how Spotify as a company has grown as the total number of users of the program increases. 
+
+Based on the exploration above and my prior knowledge of the music industry, I would say that Spotify and other music streaming platforms have greatly impacted the music industry over the last several years. It is now easier than ever for artists to get their music heard since any individual that owns a cell phone now has access to the whole music world at the touch of their fingertips. I believe that this makes artists want to release more music than ever before because a lot of popularity likely equals a lot of money earned. Nothing can get you quick money than fame and these popular artists who already make millions off their songs and albums are now more popular than ever. Spotify has changed the music industry for the betterment of both the producer and the consumer.
+
+
+__Appendix__
+
+  Being someone who likes to follow the music industry through Spotify as I have been using it since 2014, I was intrigued to see how the music industry has changed as a result of the change to the popularity of streaming music. I remember back in the day using my iPod nano and the annoyance of having to buy and download new songs and you only had about of a GB of space. Now it is so easy to access endless amounts of new music, I just open the Spotify app on my phone and within seconds I'm listening to my favorite songs from the past and present. No matter the genre, it feels like there are endless options to choose from. I've been able to discover artists and songs that I probably would have never known about if the time was 15 years ago. This has allowed for a greater interaction between the average listener and the average artist. Obviously the most popular artists have had increase in listening volume due to everything being so accessible, but I feel like streaming services like Spotify and Soundcloud have done more for the lesser known artists. The services have given artists the platform get make their own name and get their music heard. For some artists their popularity can be life changing, not only for themselves but also their listeners. This made my want to research how Spotify became so popular as I feel that the streaming music industry has changed the music culture for the better.
+
+  The packages I used during this project were Tidyverse for almost all investigating of data (graphs, tidying, etc.), knitr and kableExtra for all things table related, janitor to access duplicates in the dataset, lubridate to create date and year variables and hrbrthemes to change the themes of the plots.
+
+I did not come across any major stumbling blocks during my research.
+
+
+
+
+
+
+
+
+__PART 2__
+
+__Introduction__
+
+The data from this dataset is from Spotify via the spotifyr package. It contains a total of 28,356 songs that stem from 6 different genres (EDM, Latin, Pop, R&B, Rap, & Rock). The purpose of this section of the project is to create a knn model that can consistently predict the genre of song given predictors. The variables that are included in this dataset that will potentially be used to build this model are listed below:
+
+- __track_id__: Song unique ID
+
+- __track_name__: Song name
+
+- __track_artist__: Song artist
+
+- __track_popularity__: Song popularity (0-100) where higher is better
+
+- __track_album_id__: Album unique ID
+
+- __track_album_name__: Song album name
+
+- __track_album_release_date__: Date when album released
+
+- __playlist_name__: Name of playlist
+
+- __playlist_id__: Playlist ID
+
+- __playlist_genre__: Playlist genre
+
+- __danceability__: Danceability describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity. A value of 0.0 is least danceable and 1.0 is most danceable.
+
+- __energy__: Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy, while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate, and general entropy.
+
+- __key__: 	The estimated overall key of the track. Integers map to pitches using standard Pitch Class notation . E.g. 0 = C, 1 = C♯/D♭, 2 = D, and so on. If no key was detected, the value is -1.
+
+- __loudness__: The overall loudness of a track in decibels (dB). Loudness values are averaged across the entire track and are useful for comparing relative loudness of tracks. Loudness is the quality of a sound that is the primary psychological correlate of physical strength (amplitude). Values typical range between -60 and 0 db.
+
+- __mode__: Mode indicates the modality (major or minor) of a track, the type of scale from which its melodic content is derived. Major is represented by 1 and minor is 0.
+
+- __speechiness__: Speechiness detects the presence of spoken words in a track. The more exclusively speech-like the recording (e.g. talk show, audio book, poetry), the closer to 1.0 the attribute value. Values above 0.66 describe tracks that are probably made entirely of spoken words. Values between 0.33 and 0.66 describe tracks that may contain both music and speech, either in sections or layered, including such cases as rap music. Values below 0.33 most likely represent music and other non-speech-like tracks.
+
+- __acousticness__: A confidence measure from 0.0 to 1.0 of whether the track is acoustic. 1.0 represents high confidence the track is acoustic.
+
+- __instrumentalness__: 	Predicts whether a track contains no vocals. “Ooh” and “aah” sounds are treated as instrumental in this context. Rap or spoken word tracks are clearly “vocal”. The closer the instrumentalness value is to 1.0, the greater likelihood the track contains no vocal content. Values above 0.5 are intended to represent instrumental tracks, but confidence is higher as the value approaches 1.0.
+
+- __liveness__: 	Detects the presence of an audience in the recording. Higher liveness values represent an increased probability that the track was performed live. A value above 0.8 provides strong likelihood that the track is live.
+
+- __valence__: A measure from 0.0 to 1.0 describing the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry).
+
+- __tempo__: The overall estimated tempo of a track in beats per minute (BPM). In musical terminology, tempo is the speed or pace of a given piece and derives directly from the average beat duration.
+
+- __duration_ms__: Duration of song in milliseconds
+
+
+```{r}
+spotify_songs <- read_csv("data/spotify_songs.csv")
+```
+
+
+
+__Exploration and Methods__
+
+
+```{r}
+spotify_dupes <- spotify_songs %>% get_dupes(track_id)
+spotify_keeps <- spotify_songs %>% get_dupes(track_id) %>%
+  group_by(track_id) %>%
+  sample_n(1) %>%
+  ungroup()
+spotify_undupes <- anti_join(spotify_songs, spotify_dupes)
+spotify_final <- bind_rows(spotify_undupes, spotify_keeps)
+```
+
+When looking through the dataset I noticed that there were a number of the same songs that were included multiple times. This would be a major issue when fitting the knn model so as a result I decided to remove all the duplicates from the dataset and make sure each song was only included once.
+
+
+```{r}
+set.seed(12152021)
+spotify_scaled <- spotify_final %>%
+  mutate(across(where(is.numeric), ~ (.x - min(.x)) /
+                  (max(.x) - min(.x)))) 
+
+train_sample <- spotify_scaled %>% 
+  sample_n(75)
+test_sample <- anti_join(spotify_scaled, train_sample)
+```
+
+The next thing I wanted to do was to to split the dataset into training and test data. Before I was able to do that, since I am using a knn model, I had to scale the predictor variables. Since knn models are looking for observations with the closest distances, the goal of scaling was to put all the weights of the variables between 0 and 1 so all variables are equivalent. To do this we used this formula across all numerical variables in the dataset: scaledx = (x - min(x))/(max(x) - min(x)). I also had to set the seed for the data so that every time we were to split up the data it would split up the same. I set the seed to 12152021. After our predictors were scaled and the seed was set, it was time to separate the data. We put 75% of the data in the training dataset and the remaining 25% in the test dataset. 
+
+```{r}
+ggpairs(data = train_sample, columns = c(12:23,  10),
+        lower = list(combo = wrap(ggally_facethist, bins = 22)))
+  
+```
+
+In regards to choosing what predictors I wanted to include in the model I made a ggpairs plot that plots all of the variables that I choose against one another. Since I am trying to predict playlist genre, I moved it to the right of the plot so it is easier to read. That column is the column I was most focused on in this plot. I was looking for clear differences (or similarities) in the box plots to decide what predictors to keep (or remove).
+
+I will now go through each predictor that will be used in the model and why I decided to use it. 
+
+```{r}
+ggplot(train_sample, aes(x = playlist_genre, y = danceability)) +
+  geom_boxplot(colour = "green") +
+  labs(title = "Danceability") +
+  theme_ft_rc()
+```
+
+There seems to be a lot of differences when plotting danceability against playlist genre. As expected there is some overlap in the ranges for most of the genres but some are quite separated from others. All medians look to be relatively different. 
+
+```{r}
+ggplot(train_sample, aes(x = playlist_genre, y = energy)) +
+  geom_boxplot(colour = "green") +
+  labs(title = "Energy") +
+  theme_ft_rc()
+```
+
+Energy seems to have a good amount of variability across the genres. All medians look to be slightly different and its clear that edm songs are most likely to be the most energetic and either pop, r&b, or rap songs are most likely to be the least.
+
+```{r}
+ggplot(train_sample, aes(x = playlist_genre, y = speechiness)) +
+  geom_boxplot(colour = "green") +
+  labs(title = "Speechiness") +
+  theme_ft_rc()
+```
+
+The box plots of speechiness shows some clear differences between playlist genres. Rock has an extremely small range of speechiness, and edm, pop and r&b also have relatively small ranges. Latin and rap have larger ranges to scale but since their medians are so different I believe that is worth disregarding. 
+
+```{r}
+ggplot(train_sample, aes(x = playlist_genre, y = valence)) +
+  geom_boxplot(colour = "green") +
+  labs(title = "Valence") +
+  theme_ft_rc()
+```
+
+Although many of the ranges for the genres overlap, there are clear differences in the medians, therefore I believe that valence will be a useful predictor.
+
+```{r}
+ggplot(train_sample, aes(x = playlist_genre, y = tempo)) +
+  geom_boxplot(colour = "green") +
+  labs(title = "Tempo") +
+  theme_ft_rc()
+```
+
+Edm and lattin have quite small ranges and the medians look pretty different for all the genres when looking at the Tempo of songs.
+
+```{r}
+ggplot(train_sample, aes(x = playlist_genre, y = duration_ms)) +
+  geom_boxplot(colour = "green") +
+  labs(title = "Duration_ms") +
+  theme_ft_rc()
+```
+
+When looking at the duration of songs per genre, we see a lot of overlap in ranges but there are differences in the medians. Also, it is apparent the songs on the really short side are going to be rap songs.
+
+I am now going to fit my model.
+
+```{r}
+get_classification <- function(k) {
+  knn_mod <- knn(train = train_small, 
+                 test = test_small,
+                 cl = train_cat, k = k)
+  tab <- table(knn_mod, test_cat)
+  sum(diag(tab)) / sum(tab)
+}
+```
+
+
+```{r}
+train_small <- train_sample %>% select(c(12:13, 15,  21:23))
+test_small <- test_sample %>% select(c(12:13, 15, 21:23))
+```
+
+First I created a data frame that only has the predictors.
+
+```{r}
+train_cat <- train_sample$playlist_genre
+test_cat <- test_sample$playlist_genre
+```
+
+Then I put the response variable into a vector.
+
+```{r}
+
+test_ks <- 1:50
+class_rates <- map(test_ks, get_classification)
+
+plot_df <- tibble(ks = test_ks, 
+       class_rate = unlist(class_rates))
+ggplot(plot_df, aes(x = ks, y = class_rate)) +
+  geom_point(colour = "green") +
+  labs(title = "Classification for k nearest neighbor(s)") +
+  theme_ft_rc()
+
+find_k <- as.data.frame(do.call(cbind, class_rates)) %>% 
+  pivot_longer(cols = c(test_ks), names_to = "ks", values_to = "class_rate") %>%
+  separate(ks, into = c("irrelevant", "ks"),
+           sep = "(?<=[A-za-z])(?=[0-9])") %>%
+  select(-c(irrelevant)) %>% 
+  mutate(ks = as.numeric(ks)) %>%
+  filter(class_rate == max(class_rate))
+best_k <- find_k %>% pull(ks)
+best_k
+
+```
+
+It was then time to choose my k (or the number of nearest neighbors). To do this I tested k for number 1-50 and plotted the classification rate. As you can see on the graph, the number of neighbors that had the best classification rate is `r best_k`. Therefore, the k for my model is equal to `r best_k`.
+
+I was having an issue with my model where r was deciding to break ties differently each time I ran through the code. Therefore, the k value I was choosing was not always the best one each time. To fix this issue, I found a way to find the maximum classification rate for each given time and then return that values k.
+
+```{r}
+knn_mod <- knn(train = train_small, 
+               test = test_small,
+               cl = train_cat, k = best_k)
+confusion_matrix <- table(knn_mod, test_cat)
+confusion_matrix
+
+edm_col <- as.data.frame.matrix(confusion_matrix) %>%
+  pull(edm) 
+edm_edm <- edm_col[1]
+latin_col <- as.data.frame.matrix(confusion_matrix) %>%
+  pull(latin)
+edm_latin <- latin_col[1]
+```
+
+Above is the confusion matrix. The amount of times that the model got the correct response is on the diagonal of the matrix. For example, the model correctly predicted that the genre of the song was gong to be edm `r edm_edm` times. The amount of times that the model got the incorrect response is any number that is not on the diagonal of the matrix. For example, the model wrongfully predicted that the genre of the song was edm when the genre was actually latin `r edm_latin` times.
+
+```{r}
+tab <- confusion_matrix
+classification_rate <- sum(diag(tab)) / sum(tab)
+classification_rate
+```
+
+The proportion of correctly predicted song genres in the test sample is `r classification_rate`.
+
+Something that really caught my attention when looking at the confusion matrix was that the model was consistently predicting a low number of responses for latin or rap. This made me want to investigate why this potentially happened and maybe see how the model would do if those 2 responses were completely taken out.
+
+```{r}
+genre_tot_table <- spotify_final %>% group_by(playlist_genre) %>%
+  summarise(genre_tot = n()) %>%
+  ungroup() %>%
+  mutate(prop = genre_tot / sum(genre_tot))
+kable(genre_tot_table, digits = 3, caption = "Proportion of Songs per Genre")
+```
+
+When looking at how many songs were in the dataset for each genre, it appears that latin has the least amount of songs. This could potentially explain why latin was not being selected as since the model is looking for the most nearest neighbors. On the other hand, rap has the most amount of songs in the dataset so that does not explain the lack of results.
+
+When looking back at the box plots used to choose the predictors I noticed a trend. Rap, consistently, had a very large range for each predictor. This makes me think that the songs that were put into the playlist genre of rap a had a very vast definition of what rap is. Since the definition is so broad and there are so many different types of songs that are considered rap, that means there is likely to be a lack of cluster of songs that are rap, therefore, rap rarely had the most nearest neighbors.
+
+```{r}
+spotify_scaled2 <- spotify_final %>%
+  mutate(across(where(is.numeric), ~ (.x - min(.x)) /
+                  (max(.x) - min(.x)))) %>%
+  filter(playlist_genre != "latin",
+         playlist_genre != "rap")
+
+train_sample2 <- spotify_scaled2 %>% 
+  sample_n(75)
+test_sample2 <- anti_join(spotify_scaled2, train_sample2)
+
+train_small2 <- train_sample2 %>% select(c(12:13, 15,  21:23))
+test_small2 <- test_sample2 %>% select(c(12:13, 15, 21:23))
+
+train_cat2 <- train_sample2$playlist_genre
+test_cat2 <- test_sample2$playlist_genre
+
+
+knn_mod2 <- knn(train = train_small2, 
+               test = test_small2,
+               cl = train_cat2, k = best_k)
+confusion_matrix2 <- table(knn_mod2, test_cat2)
+confusion_matrix2
+tab2 <- confusion_matrix2
+classification_rate2 <- sum(diag(tab2)) / sum(tab2)
+classification_rate2
+```
+
+When the same model is ran without latin and rap songs included, the model now correctly predicts the song genre a proportion of `r classification_rate2`. This is a large improvement on our previous results.
+
+
+__Conclusion__
+
+It seems pretty clear that predicting the genre of a song with a knn model is fairly difficult thing to do with this given dataset. If I were to work on this further, I would try to discover a way that compensates for the latin and rap genres rather than just completely removing them from the data.
+
+
+__Appendix__
+
+  k-nearest neighbors (or knn) is a basic supervised machine learning algorithm, it tends to be used as a classification algorithm. Classification is the prediction of a categorical response variable with greater than 1 categories. This is useful because it is a simple way to not only teach what an model is but also use as an effective resource to make predictions.
+  
+  In the model I created above, the response was playlist genre with was separated into 6 different categories (edm, latin, pop, r&b, rap and rock). We wanted to be able to predict what the genre of a song was based on a group of set predictors. We then wanted to get our classification rate which was the proportion of how many songs we predicted the genre of correctly. To understand how to get the best classification rate, you need to understand what a knn model is doing. The model is looking for the k closest observations based on the response variable and whatever has the most observations out of that k is the observation predicted. k is the number of observations being counted by the model. You also need to scale your variables. You have to do this knn models relies of distance between points in its predictors. By scaling the predictors, we are now saying that all predictors are equally weighted in regards to the distance between observations. When all of this is done correctly, you are on your way to creating an effective knn model based on the data. 
+  
+  I measured what a good model was by testing a number of different predictors with different levels of k's until I was confident in that set of predictors to consistently give me the highest classification rate. I split the original dataset into a training and test dataset by putting 75% of the data into the training dataset and then the remaining 25% into the test dataset. I did this because this creates "fairer" test of the model. The model will be testing data it had never seen before where as if I didn't do this it would be testing the same data it created the model with. I chose what predictors I used by looking at the ggpairs plot as well boxplots of possible predictors where I was looking for clear difference between the possible predictor and the response variable. I chose the value of k based on the best classification. I created code that would create a list of all classification rates for k 1-50 and then it would find the maximum classification rate and return the k used to get that rate. I then plugged the best k into the model. I then created a confusion matrix seeing how each category of the response variable performed.
