@@ -1,0 +1,53 @@
+---
+title: "toy"
+author: "Shane Hauck"
+date: '2022-04-12'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+players_22 <- read_csv("data/players_22.csv")
+```
+
+```{r}
+ggplot(players_22, aes(x = movement_agility, y = height_cm)) +
+  geom_point()
+ggplot(players_22, aes(x = movement_agility, y = weight_kg)) +
+  geom_point()
+
+ggplot(players_22, aes(skill_ball_control, height_cm)) +
+  geom_point()
+```
+
+```{r}
+set.seed(06092001)
+df <- players_22 %>% separate(player_positions, into = c("Pos1", "Pos2", "Pos3")) %>% filter(league_level == 1) %>% filter(Pos1 != "GK") %>% group_by(body_type) %>% slice_sample(n = 81)  
+
+ggplot(df %>% filter(Pos1 != "GK"), aes(height_cm, movement_agility)) + geom_point()  + geom_jitter() + geom_smooth() + 
+  labs(caption = "source: https://www.kaggle.com/datasets/stefanoleone992/fifa-22-complete-player-dataset")
+```
+
+```{r}
+ggplot(df %>% filter(Pos1 != "GK"), aes(height_cm, weight_kg)) + geom_point() + geom_jitter() + facet_wrap(~body_type)
+```
+
+```{r}
+x <- c("Lean (170-)", "Normal (170-)", "Stocky (170-)", "Lean (170-185)", "Normal (170-185)", "Stocky (170-185)", "Lean (185+)", "Normal (185+)", "Stocky (185+)", "Unique")
+ggplot(df %>% filter(Pos1 != "GK") %>% filter(body_type != "Unique") %>% mutate(body_type = factor(body_type, x)) %>% arrange(body_type), aes(movement_acceleration, movement_agility, color = movement_balance)) + geom_point() + geom_jitter() + scale_color_viridis_c() + facet_wrap(~body_type, ncol = 3) + labs(caption = "Figure 4: FIFA 22 Acceleration, Agility, and Balance Ratings based on Height and Body Type", y = "Agility Rating", x = "Acceleration Rating", color = "Balance Rating")
+
+ggplot(df %>% filter(Pos1 != "GK"), aes(height_cm, movement_acceleration)) + geom_point() + geom_jitter() + geom_smooth() + labs(caption = "Figure 2: Players height in cm vs FIFA 22 acceleration rating", y = "Acceleration Rating", x = "Height(cm)")
+
+ggplot(df %>% filter(Pos1 != "GK"), aes(height_cm, movement_balance)) + geom_point() + geom_jitter() + geom_smooth() + labs( caption = "Figure 1: Players height in cm vs FIFA 22 balance rating", y = "Balance Rating", x = "Height(cm)")
+
+ggplot(df %>% filter(Pos1 != "GK"), aes(height_cm, movement_agility)) + geom_point() + geom_jitter() + geom_smooth() + labs(caption = "Figure 3: FIFA 22 Agility Ratings vs Height", y = "Agility Rating", x = "Height(cm)")
+```
+
